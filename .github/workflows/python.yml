@@ -14,8 +14,11 @@ jobs:
         with:
           python-version: '3.12'
       - run: pip install -e '.[test]'
+      - run: pip check
       - run: python -m playwright install --with-deps chromium
       - run: pytest -q
+      - run: python -m pip install 'pip-audit>=2.7,<3'
+      - run: pip-audit -r requirements.lock
       - run: docker compose config --quiet
       - run: docker compose build
       - run: docker compose run --rm app alembic upgrade head
