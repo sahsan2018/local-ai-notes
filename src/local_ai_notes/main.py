@@ -1,3 +1,4 @@
+import os
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -6,10 +7,13 @@ from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 
 from .db import database_engine
+from .web import install_web
 
 
-def create_app(engine=None):
+def create_app(engine=None, cookie_secure=None):
     engine = engine if engine is not None else database_engine()
+    if cookie_secure is None:
+        cookie_secure = os.environ.get("LOCAL_AI_NOTES_COOKIE_SECURE", "true").lower() not in {"0", "false", "no"}
 
     @asynccontextmanager
     async def lifespan(_app):
@@ -34,4 +38,5 @@ def create_app(engine=None):
             return JSONResponse({"status": "not_ready"}, status_code=503)
         return {"status": "ready"}
 
+    install_web(app, engine, cookie_secure=cookie_secure)
     return app

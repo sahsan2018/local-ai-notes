@@ -23,9 +23,11 @@ See [Architecture](docs/ARCHITECTURE.md), [Product specification](docs/PRODUCT_S
 
 ## Status
 
-Stage 1 adds a FastAPI health service, SQLite migration, local owner/Inbox setup, Docker configuration and foundation tests. Stage 2 adds internal project/note services, revisions, trash/restore, conflict checks and safe retries; see [stage 2 scope](docs/STAGE_2.md). See [development setup](docs/DEVELOPMENT.md) to run tests. Browser login, public note endpoints, search, exports and the editor are not implemented yet.
+Stage 1 adds the FastAPI/SQLite/bootstrap foundation. Stage 2 adds internal project/note services, revisions, trash/restore, conflict checks and safe retries. Stage 3 adds authenticated browser access and the first responsive Markdown notebook interface; see [stage 3 scope](docs/STAGE_3.md). The stacked draft PRs remain unmerged.
 
-See the [first milestone](docs/MILESTONE_0_0_1.md), [data model](docs/DATA_MODEL.md), and [capability contracts](docs/CAPABILITIES.md). These describe planned behavior, not implemented features. Revision cleanup, nested folders and rich document/image editing follow later.
+The complete v0.0.1 milestone is still unfinished: scoped full-text search, history usage reporting, exports, tested backup/restore, broader acceptance checks and Pi/ARM64 verification remain. No AI feature is implemented yet. See [development setup](docs/DEVELOPMENT.md).
+
+See the [first milestone](docs/MILESTONE_0_0_1.md), [data model](docs/DATA_MODEL.md), and [capability contracts](docs/CAPABILITIES.md). These describe accepted behavior beyond what is currently implemented. Revision cleanup, nested folders and rich document/image editing follow later.
 
 ## Contributing
 
