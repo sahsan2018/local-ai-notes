@@ -11,7 +11,7 @@ Thank you for helping shape Local AI Notes. The project is currently documentati
 
 ## Development workflow
 
-The implementation toolchain is not finalized. Once code exists, this section will document reproducible setup, formatting, linting, testing, migrations, and local Docker execution. Until then, documentation pull requests should use clear Markdown and keep links relative where practical.
+See [development setup](docs/DEVELOPMENT.md) for Python, migrations, tests and Docker commands. Run `pytest -q` before submitting foundation changes. Documentation pull requests should use clear Markdown and relative links where practical; documentation CI remains required.
 
 ## Architecture decisions
 

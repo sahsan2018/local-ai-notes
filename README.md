@@ -1,7 +1,7 @@
 # Local AI Notes
 
 > [!IMPORTANT]
-> This project is in the architecture and product-design phase. It is not yet ready for production use.
+> This project is in early development. It is not yet ready for production use.
 
 A local-first, self-hosted note-taking platform designed to remain fully useful without AI while supporting optional local AI assistance, OCR, semantic retrieval, and controlled agent tools.
 
@@ -23,7 +23,7 @@ See [Architecture](docs/ARCHITECTURE.md), [Product specification](docs/PRODUCT_S
 
 ## Status
 
-No application code has been committed yet. The next milestone is a thin vertical slice: projects with an Inbox, Markdown editing with a small toolbar, safe saves, search, history, trash/restore, and export.
+Stage 1 adds a FastAPI health service, SQLite migration, local owner/Inbox setup, Docker configuration and foundation tests. See [development setup](docs/DEVELOPMENT.md). Browser login, note operations and the editor are not implemented yet. The next milestone remains projects with an Inbox, Markdown editing with a small toolbar, safe saves, search, history, trash/restore, and export.
 
 See the [first milestone](docs/MILESTONE_0_0_1.md), [data model](docs/DATA_MODEL.md), and [capability contracts](docs/CAPABILITIES.md). These describe planned behavior, not implemented features. Revision cleanup, nested folders and rich document/image editing follow later.
 

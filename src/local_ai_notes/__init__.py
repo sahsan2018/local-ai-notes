@@ -1,0 +1,1 @@
+"""Local AI Notes foundation."""
