@@ -2,7 +2,8 @@ from alembic import context
 
 from local_ai_notes.db import database_engine
 
-engine = database_engine()
+url = context.config.get_main_option("sqlalchemy.url") or None
+engine = database_engine(url)
 with engine.connect() as connection:
     context.configure(connection=connection, target_metadata=None, transaction_per_migration=True)
     with context.begin_transaction():
