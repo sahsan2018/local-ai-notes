@@ -34,4 +34,4 @@ Do not report vulnerabilities in public issues. Follow [SECURITY.md](SECURITY.md
 
 ## License
 
-Copyright (c) 2026 Shajib Ahsan. Licensed under the [GNU Affero General Public License v3.0](LICENSE). The license choice may be revisited before the first stable release.
+Copyright (c) 2026 Shajib Ahsan. Licensed under the [MIT License](LICENSE).
