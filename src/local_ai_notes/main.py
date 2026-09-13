@@ -7,6 +7,7 @@ from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 
 from .db import database_engine
+from .export_web import install_export_web
 from .web import install_web
 
 
@@ -39,4 +40,5 @@ def create_app(engine=None, cookie_secure=None):
         return {"status": "ready"}
 
     install_web(app, engine, cookie_secure=cookie_secure)
+    install_export_web(app, engine)
     return app
