@@ -25,3 +25,10 @@ def run_restore(source, confirm_replace=False):
     if result["safety_backup"]:
         print(f"Pre-restore safety backup: {result['safety_backup']}")
     print("All restored sessions were revoked. Run alembic upgrade head before restarting the application.")
+
+
+COMMANDS = {
+    "backup": run_backup,
+    "verify-backup": run_verify,
+    "restore": run_restore,
+}
