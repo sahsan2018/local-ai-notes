@@ -1,6 +1,6 @@
 # Development
 
-This branch implements the storage foundation, stage-two application services and the first authenticated browser notebook described in [stage 3](STAGE_3.md). Search, exports, backup tooling and AI remain later work; v0.0.1 is not complete.
+This branch implements the storage foundation, application services, authenticated browser notebook and the scoped search/history-usage work described in [stage 4](STAGE_4.md). Exports, tested backup/restore and AI remain later work; v0.0.1 is not complete.
 
 ## Local setup
 
@@ -22,7 +22,7 @@ Open `http://127.0.0.1:8000/login`. `LOCAL_AI_NOTES_COOKIE_SECURE=false` is only
 
 PowerShell: activate with `.venv\Scripts\Activate.ps1`, create `data` with `New-Item -ItemType Directory -Force data`, set `$env:DATABASE_URL='sqlite:///./data/notes.db'`, and set `$env:LOCAL_AI_NOTES_COOKIE_SECURE='false'` only for local HTTP development.
 
-The administrative commands prompt twice without echoing the password. Initial passwords require 12-1024 characters and are hashed using Argon2id. Bootstrap creates one normalized owner account and Inbox atomically. Local recovery uses `notes reset-password --username owner`; a successful reset revokes every existing browser session. Do not pass passwords in arguments or commit them.
+The administrative commands prompt twice without echoing the password. Initial passwords require 12-1024 characters and are hashed using Argon2id. Bootstrap creates one normalized owner account and Inbox atomically. Local recovery uses `notes reset-password --username owner`; a successful reset revokes every existing browser session. `notes rebuild-search` reconstructs the derived FTS index from current active revisions and does not modify canonical note/history data.
 
 ## Docker setup
 
@@ -43,16 +43,17 @@ A later Pi deployment can use an OMV bind mount owned by UID 10001 with appropri
 - Browser writes require CSRF tokens and same-origin requests.
 - The server resolves actor identity from the session; client actor/provenance fields are rejected.
 - Markdown preview disables raw HTML, strips unsafe link schemes and does not render remote images.
+- Search accepts literal AND-combined terms only, scopes before returning results and safely escapes browser snippets.
 - The login throttle is intentionally in-process for the single-process initial deployment; it is not a substitute for a distributed limiter if the deployment topology changes.
 
 ## Health and verification
 
 - `/health/live` reports that the process responds.
-- `/health/ready` returns 200 only when the database is reachable at schema 0001; otherwise 503 without database details.
-- Run `pytest -q` for foundation, services, authentication, browser conflict, cursor/scope and sanitization tests.
+- `/health/ready` returns 200 only when the database is reachable at schema 0002; otherwise 503 without database details.
+- Run `pytest -q` for foundation, services, authentication, browser conflict, search/index lifecycle, cursor/scope, usage and sanitization tests.
 - CI also builds and starts the Docker image after migrating an empty named volume.
 
-Readiness still targets migration 0001 because Stage 3 does not change schema. It does not promise sufficient disk space, write access, owner setup or backup health. Destructive downgrades remain disabled; a tested end-user backup/restore workflow is still pending.
+Readiness targets migration 0002 but does not audit every FTS row. Search is rebuildable derived state. Readiness does not promise sufficient disk space, write access, owner setup or backup health. Destructive downgrades remain disabled; a tested end-user backup/restore workflow is still pending.
 
 ## Dependency and release limits
 

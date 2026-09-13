@@ -8,6 +8,7 @@ from sqlalchemy import text
 
 from .auth import reset_password
 from .db import database_engine
+from .search import rebuild_search_index
 
 
 def create_owner(engine, username, password):
@@ -54,9 +55,14 @@ def main():
     create.add_argument("--username", required=True)
     reset = sub.add_parser("reset-password")
     reset.add_argument("--username", required=True)
+    sub.add_parser("rebuild-search")
     args = parser.parse_args()
     engine = database_engine()
     try:
+        if args.command == "rebuild-search":
+            count = rebuild_search_index(engine)
+            print(f"Search index rebuilt: {count} active notes indexed.")
+            return
         password = _password_pair(parser)
         if args.command == "create-owner":
             create_owner(engine, args.username, password)

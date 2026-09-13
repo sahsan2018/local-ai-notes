@@ -7,6 +7,8 @@ from uuid import UUID, uuid4
 from sqlalchemy import text
 from sqlalchemy.exc import OperationalError
 
+from .search import HIT_END, HIT_START, normalize_search_query
+
 
 class ServiceError(Exception):
     def __init__(self, code, **details):
@@ -34,6 +36,17 @@ def _timestamp_cursor(value):
     if not isinstance(value, (tuple, list)) or len(value) != 2 or not isinstance(value[0], str):
         raise ServiceError('validation_error', field='cursor')
     return value[0], identifier(value[1])
+
+
+def _search_cursor(value):
+    if value is None:
+        return None
+    if not isinstance(value, (tuple, list)) or len(value) != 3:
+        raise ServiceError('validation_error', field='cursor')
+    score, updated_at, note_id = value
+    if not isinstance(score, (int, float)) or not isinstance(updated_at, str):
+        raise ServiceError('validation_error', field='cursor')
+    return float(score), updated_at, identifier(note_id)
 
 
 class Notebook:
@@ -72,6 +85,26 @@ class Notebook:
             with self.engine.connect() as c:
                 self._authorize(c)
                 return self._revision(c, identifier(note_id), revision_id)
+        except OperationalError:
+            raise ServiceError('temporarily_unavailable') from None
+
+    def get_history_usage(self, note_id=None):
+        try:
+            with self.engine.connect() as c:
+                self._authorize(c)
+                values = {'owner': self.actor}
+                sql = '''SELECT count(*) AS revision_count,
+                         COALESCE(sum(length(CAST(r.title AS BLOB)) + length(CAST(r.body_markdown AS BLOB))),0)
+                         AS approximate_content_bytes
+                         FROM note_revisions r JOIN notes n ON n.id=r.note_id
+                         WHERE n.owner_id=:owner'''
+                if note_id is not None:
+                    note = self._note(c, note_id)
+                    values['note'] = note['id']
+                    sql += ' AND n.id=:note'
+                result = c.execute(text(sql), values).mappings().one()
+                return {'revision_count': result['revision_count'],
+                        'approximate_content_bytes': result['approximate_content_bytes']}
         except OperationalError:
             raise ServiceError('temporarily_unavailable') from None
 
@@ -123,6 +156,47 @@ class Notebook:
                         values.update(after_time=cursor[0], after_id=cursor[1])
                         sql += ' AND (n.updated_at<:after_time OR (n.updated_at=:after_time AND n.id<:after_id))'
                     sql += ' ORDER BY n.updated_at DESC,n.id DESC LIMIT :limit'
+                return [dict(r) for r in c.execute(text(sql), values).mappings()]
+        except OperationalError:
+            raise ServiceError('temporarily_unavailable') from None
+
+    def search_notes(self, project_id, query, limit=25, after=None):
+        if type(limit) is not int or not 1 <= limit <= 100:
+            raise ServiceError('validation_error', field='limit')
+        try:
+            normalized, fts_query = normalize_search_query(query)
+        except ValueError:
+            raise ServiceError('validation_error', field='query') from None
+        if not normalized:
+            return self.list_notes(project_id, False, limit, after)
+        cursor = _search_cursor(after)
+        try:
+            with self.engine.connect() as c:
+                self._authorize(c)
+                values = {
+                    'owner': self.actor, 'query': fts_query, 'limit': limit,
+                    'hit_start': HIT_START, 'hit_end': HIT_END,
+                }
+                sql = '''WITH matches AS (
+                    SELECT note_id,
+                           bm25(note_search,0.0,5.0,1.0) AS score,
+                           snippet(note_search,2,:hit_start,:hit_end,' … ',28) AS snippet
+                    FROM note_search WHERE note_search MATCH :query
+                )
+                SELECT n.id,n.project_id,n.version,n.updated_at,r.title,m.snippet,m.score
+                FROM matches m JOIN notes n ON n.id=m.note_id
+                JOIN note_revisions r ON r.id=n.current_revision_id
+                WHERE n.owner_id=:owner AND n.deleted_at IS NULL'''
+                if project_id is not None:
+                    project = self._project(c, project_id)
+                    values['scope'] = project['id']
+                    sql += ' AND n.project_id=:scope'
+                if cursor:
+                    values.update(after_score=cursor[0], after_time=cursor[1], after_id=cursor[2])
+                    sql += ''' AND (m.score>:after_score OR
+                              (m.score=:after_score AND n.updated_at<:after_time) OR
+                              (m.score=:after_score AND n.updated_at=:after_time AND n.id<:after_id))'''
+                sql += ' ORDER BY m.score ASC,n.updated_at DESC,n.id DESC LIMIT :limit'
                 return [dict(r) for r in c.execute(text(sql), values).mappings()]
         except OperationalError:
             raise ServiceError('temporarily_unavailable') from None
@@ -200,6 +274,16 @@ class Notebook:
         except OperationalError:
             raise ServiceError('temporarily_unavailable') from None
 
+    @staticmethod
+    def _search_replace(c, note_id, title, body):
+        c.execute(text('DELETE FROM note_search WHERE note_id=:note'), {'note': note_id})
+        c.execute(text('INSERT INTO note_search(note_id,title,body_markdown) VALUES (:note,:title,:body)'),
+                  {'note': note_id, 'title': title, 'body': body})
+
+    @staticmethod
+    def _search_delete(c, note_id):
+        c.execute(text('DELETE FROM note_search WHERE note_id=:note'), {'note': note_id})
+
     def _mutate(self, c, op, p, now, request):
         note = None
         project = None
@@ -222,6 +306,7 @@ class Notebook:
             project = p['project_id']
             c.execute(text("INSERT INTO notes VALUES (:id,:owner,:project,:revision,1,2,:now,:now,NULL)"), {'id': note, 'owner': self.actor, 'project': project, 'revision': revision, 'now': now})
             self._insert_revision(c, note, revision, 1, p, now, request)
+            self._search_replace(c, note, p['title'], p['body_markdown'])
         else:
             old = self._note(c, p['note_id'])
             self._version(old, p)
@@ -236,6 +321,7 @@ class Notebook:
                     before = old['current_revision_id']
                     self._insert_revision(c, note, revision, old['next_revision_number'], content, now, request, p.get('revision_id'))
                     c.execute(text('UPDATE notes SET current_revision_id=:revision,next_revision_number=next_revision_number+1 WHERE id=:id'), {'revision': revision, 'id': note})
+                    self._search_replace(c, note, content['title'], content['body_markdown'])
             elif op == 'move_note':
                 changed = project != p['destination_project_id']
                 if changed:
@@ -247,6 +333,10 @@ class Notebook:
                 changed = bool(old['deleted_at']) != bool(deleted)
                 if changed:
                     c.execute(text('UPDATE notes SET deleted_at=:deleted WHERE id=:id'), {'deleted': deleted, 'id': note})
+                    if op == 'trash_note':
+                        self._search_delete(c, note)
+                    else:
+                        self._search_replace(c, note, old['title'], old['body_markdown'])
             if changed:
                 c.execute(text('UPDATE notes SET version=version+1,updated_at=:now WHERE id=:id'), {'now': now, 'id': note})
         if changed:
