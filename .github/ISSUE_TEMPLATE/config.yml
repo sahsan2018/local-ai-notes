@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security report
+    url: https://github.com/sahsan2018/local-ai-notes/security/advisories/new
+    about: Privately report a suspected vulnerability
