@@ -1,6 +1,6 @@
 # Development
 
-This branch implements the storage foundation, application services, authenticated browser notebook and the scoped search/history-usage work described in [stage 4](STAGE_4.md). Exports, tested backup/restore and AI remain later work; v0.0.1 is not complete.
+This branch implements the storage foundation, trusted services, authenticated browser notebook, scoped search/history usage and portable exports described through [stage 5](STAGE_5.md). Tested backup/restore and AI remain later work; v0.0.1 is not complete.
 
 ## Local setup
 
@@ -22,7 +22,11 @@ Open `http://127.0.0.1:8000/login`. `LOCAL_AI_NOTES_COOKIE_SECURE=false` is only
 
 PowerShell: activate with `.venv\Scripts\Activate.ps1`, create `data` with `New-Item -ItemType Directory -Force data`, set `$env:DATABASE_URL='sqlite:///./data/notes.db'`, and set `$env:LOCAL_AI_NOTES_COOKIE_SECURE='false'` only for local HTTP development.
 
-The administrative commands prompt twice without echoing the password. Initial passwords require 12-1024 characters and are hashed using Argon2id. Bootstrap creates one normalized owner account and Inbox atomically. Local recovery uses `notes reset-password --username owner`; a successful reset revokes every existing browser session. `notes rebuild-search` reconstructs the derived FTS index from current active revisions and does not modify canonical note/history data.
+The administrative commands prompt twice without echoing the password. Initial passwords require 12-1024 characters and are hashed using Argon2id. Bootstrap creates one normalized owner account and Inbox atomically. Local recovery uses `notes reset-password --username owner`; a successful reset revokes every existing browser session. `notes rebuild-search` reconstructs derived FTS state only.
+
+## Export behavior
+
+Exports are generated on demand from committed active content. Note export downloads Markdown with YAML frontmatter. Project/workspace export downloads a temporary ZIP containing `manifest.json` and UUID-named Markdown notes; temporary archives are removed after response completion. Workspace manifests preserve empty projects and Inbox identity. Exports are not backups: trash, full history, credentials, sessions and other complete application state are excluded.
 
 ## Docker setup
 
@@ -44,16 +48,17 @@ A later Pi deployment can use an OMV bind mount owned by UID 10001 with appropri
 - The server resolves actor identity from the session; client actor/provenance fields are rejected.
 - Markdown preview disables raw HTML, strips unsafe link schemes and does not render remote images.
 - Search accepts literal AND-combined terms only, scopes before returning results and safely escapes browser snippets.
-- The login throttle is intentionally in-process for the single-process initial deployment; it is not a substitute for a distributed limiter if the deployment topology changes.
+- Export reads are session-authenticated and owner-scoped; filenames/archive paths are generated from canonical UUIDs rather than user titles.
+- The login throttle is intentionally in-process for the single-process initial deployment.
 
 ## Health and verification
 
 - `/health/live` reports that the process responds.
 - `/health/ready` returns 200 only when the database is reachable at schema 0002; otherwise 503 without database details.
-- Run `pytest -q` for foundation, services, authentication, browser conflict, search/index lifecycle, cursor/scope, usage and sanitization tests.
+- Run `pytest -q` for foundation, services, authentication, browser conflict, search/index lifecycle, export format/snapshot behavior and sanitization tests.
 - CI also builds and starts the Docker image after migrating an empty named volume.
 
-Readiness targets migration 0002 but does not audit every FTS row. Search is rebuildable derived state. Readiness does not promise sufficient disk space, write access, owner setup or backup health. Destructive downgrades remain disabled; a tested end-user backup/restore workflow is still pending.
+Readiness remains at migration 0002 because Stage 5 adds no persistent schema. It does not promise sufficient disk space, owner setup, export temp-space availability or backup health. Destructive downgrades remain disabled; a tested backup/restore workflow is still pending.
 
 ## Dependency and release limits
 
