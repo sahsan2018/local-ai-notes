@@ -1,11 +1,13 @@
 import base64
+import hashlib
 import hmac
+import html
 import json
 import secrets
 import threading
 import time
 from pathlib import Path
-from urllib.parse import parse_qs
+from urllib.parse import parse_qs, quote_plus
 from uuid import UUID, uuid4
 
 import bleach
@@ -16,11 +18,13 @@ from fastapi.templating import Jinja2Templates
 from markdown_it import MarkdownIt
 
 from .auth import LOGIN_CSRF_COOKIE, SESSION_COOKIE, authenticated_user, issue_session, revoke_session
+from .search import HIT_END, HIT_START, normalize_search_query, query_fingerprint, strip_hit_markers
 from .services import Notebook, ServiceError
 
 ROOT = Path(__file__).resolve().parent
 TEMPLATES = Jinja2Templates(directory=str(ROOT / "templates"))
 TEMPLATES.env.globals["new_key"] = lambda: str(uuid4())
+TEMPLATES.env.filters["urlencode"] = quote_plus
 MARKDOWN = MarkdownIt("commonmark", {"html": False, "linkify": True})
 ALLOWED_TAGS = ["p", "br", "h1", "h2", "h3", "h4", "h5", "h6", "strong", "em", "ul", "ol", "li", "blockquote", "pre", "code", "a", "hr"]
 
@@ -50,6 +54,25 @@ def render_markdown(source):
     rendered = MARKDOWN.render(source)
     return bleach.clean(rendered, tags=ALLOWED_TAGS, attributes={"a": ["href", "title"]},
                         protocols=["http", "https", "mailto"], strip=True)
+
+
+def render_search_snippet(source):
+    escaped = html.escape(source or "")
+    return escaped.replace(HIT_START, "<mark>").replace(HIT_END, "</mark>")
+
+
+def format_bytes(value):
+    value = int(value)
+    units = ["B", "KiB", "MiB", "GiB"]
+    amount = float(value)
+    unit = units[0]
+    for unit in units:
+        if amount < 1024 or unit == units[-1]:
+            break
+        amount /= 1024
+    if unit == "B":
+        return f"~{int(amount)} {unit}"
+    return f"~{amount:.1f} {unit}"
 
 
 def csrf_for_session(raw):
@@ -84,6 +107,24 @@ def parse_cursor(value, kind, scope, trashed):
         return None
     data = _unb64(value)
     if data.get("v") != 1 or data.get("kind") != kind or data.get("scope") != scope or bool(data.get("trashed")) != bool(trashed):
+        raise ServiceError("validation_error", field="cursor")
+    return data.get("position")
+
+
+def make_search_cursor(scope, normalized_query, item):
+    return _b64({
+        "v": 1, "kind": "search", "scope": scope,
+        "query": query_fingerprint(normalized_query),
+        "position": [item["score"], item["updated_at"], item["id"]],
+    })
+
+
+def parse_search_cursor(value, scope, normalized_query):
+    if not value:
+        return None
+    data = _unb64(value)
+    if (data.get("v") != 1 or data.get("kind") != "search" or data.get("scope") != scope
+            or data.get("query") != query_fingerprint(normalized_query)):
         raise ServiceError("validation_error", field="cursor")
     return data.get("position")
 
@@ -214,6 +255,22 @@ def install_web(app, engine, cookie_secure=True):
         next_cursor = make_cursor(kind, scope, trashed, rows[-1]) if more and rows else None
         return rows, next_cursor
 
+    def search_page(book, scope, query, limit, cursor):
+        try:
+            normalized, _ = normalize_search_query(query)
+        except ValueError:
+            raise ServiceError("validation_error", field="query") from None
+        if not normalized:
+            return list_page(book, "notes", scope, False, limit, cursor)
+        after = parse_search_cursor(cursor, scope, normalized)
+        wanted = min(limit, 100)
+        fetch_limit = min(wanted + 1, 100)
+        rows = book.search_notes(scope, normalized, fetch_limit, after)
+        more = len(rows) > wanted
+        rows = rows[:wanted]
+        nxt = make_search_cursor(scope, normalized, rows[-1]) if more and rows else None
+        return rows, nxt
+
     @app.get("/api/projects")
     def api_projects(request: Request, limit: int = 25, cursor: str = ""):
         try:
@@ -237,6 +294,41 @@ def install_web(app, engine, cookie_secure=True):
         except (ValueError, ServiceError) as error:
             return _json_error(error if isinstance(error, ServiceError) else ServiceError("validation_error", field="project_id"))
 
+    @app.get("/api/search")
+    def api_search(request: Request, project_id: str, q: str = "", limit: int = 25, cursor: str = ""):
+        try:
+            _, _, book = require(request)
+            scope = None if project_id == "all" else str(UUID(project_id))
+            if not 1 <= limit <= 100:
+                raise ServiceError("validation_error", field="limit")
+            rows, nxt = search_page(book, scope, q, limit, cursor)
+            items = []
+            for result in rows:
+                item = {k: v for k, v in result.items() if k not in {"id", "score"}}
+                item["note_id"] = result["id"]
+                if "snippet" in item:
+                    item["snippet"] = strip_hit_markers(item["snippet"])
+                items.append(item)
+            return {"items": items, "next_cursor": nxt}
+        except (ValueError, ServiceError) as error:
+            return _json_error(error if isinstance(error, ServiceError) else ServiceError("validation_error", field="project_id"))
+
+    @app.get("/api/history-usage")
+    def api_workspace_history_usage(request: Request):
+        try:
+            _, _, book = require(request)
+            return book.get_history_usage()
+        except ServiceError as error:
+            return _json_error(error)
+
+    @app.get("/api/notes/{note_id}/history-usage")
+    def api_note_history_usage(request: Request, note_id: str):
+        try:
+            _, _, book = require(request)
+            return book.get_history_usage(str(UUID(note_id)))
+        except (ValueError, ServiceError) as error:
+            return _json_error(error if isinstance(error, ServiceError) else ServiceError("validation_error", field="note_id"))
+
     @app.get("/api/notes/{note_id}/revisions")
     def api_revisions(request: Request, note_id: str, limit: int = 25, cursor: str = ""):
         try:
@@ -248,24 +340,34 @@ def install_web(app, engine, cookie_secure=True):
             return _json_error(error if isinstance(error, ServiceError) else ServiceError("validation_error", field="note_id"))
 
     @app.get("/app", response_class=HTMLResponse, include_in_schema=False)
-    def notebook_page(request: Request, project: str = "", note: str = "", trash: bool = False):
+    def notebook_page(request: Request, project: str = "", note: str = "", trash: bool = False, q: str = ""):
         try:
             raw, user, book = require(request)
             projects = book.list_projects(100)
             scope = None if project == "all" else (project or (next((p["id"] for p in projects if p["is_inbox"]), projects[0]["id"] if projects else None)))
             if scope is not None:
                 scope = str(UUID(scope))
-            notes = book.list_notes(scope, trash, 100)
+            search_query = ""
+            if not trash:
+                try:
+                    search_query, _ = normalize_search_query(q)
+                except ValueError:
+                    raise ServiceError("validation_error", field="query") from None
+            notes = book.search_notes(scope, search_query, 100) if search_query else book.list_notes(scope, trash, 100)
             selected = None
             revisions = []
+            history_usage = None
             if note:
                 selected = book.get_note(note)
                 if (scope is not None and selected["project_id"] != scope) or bool(selected["deleted_at"]) != bool(trash):
                     raise ServiceError("not_found")
                 revisions = book.list_revisions(selected["id"], 100)
+                history_usage = book.get_history_usage(selected["id"])
             return TEMPLATES.TemplateResponse(request, "app.html", {
                 "user": user, "projects": projects, "scope": scope, "all_projects": scope is None,
                 "trash": trash, "notes": notes, "selected": selected, "revisions": revisions,
+                "history_usage": history_usage, "search_query": search_query,
+                "search_snippet": render_search_snippet, "format_bytes": format_bytes,
                 "csrf": csrf_for_session(raw),
             })
         except ValueError:

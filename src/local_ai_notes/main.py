@@ -32,7 +32,7 @@ def create_app(engine=None, cookie_secure=None):
         try:
             with engine.connect() as connection:
                 version = connection.execute(text("SELECT version_num FROM alembic_version")).scalar()
-                if version != "0001":
+                if version != "0002":
                     return JSONResponse({"status": "not_ready"}, status_code=503)
         except SQLAlchemyError:
             return JSONResponse({"status": "not_ready"}, status_code=503)
