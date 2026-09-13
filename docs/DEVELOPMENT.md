@@ -1,6 +1,6 @@
-# Stage 1 development
+# Development
 
-This branch implements the storage/application foundation only. There is no notebook UI, browser login, session issuance, note API, search or AI yet. Session storage is prepared for subsequent work. The complete v0.0.1 milestone remains unfinished.
+This branch implements the storage foundation and [internal stage 2 application services](STAGE_2.md). There is no notebook UI, browser login, session issuance, HTTP note API, search or AI yet. Session storage is prepared for subsequent work. The complete v0.0.1 milestone remains unfinished.
 
 ## Local setup
 

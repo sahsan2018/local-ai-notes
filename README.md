@@ -23,7 +23,7 @@ See [Architecture](docs/ARCHITECTURE.md), [Product specification](docs/PRODUCT_S
 
 ## Status
 
-Stage 1 adds a FastAPI health service, SQLite migration, local owner/Inbox setup, Docker configuration and foundation tests. See [development setup](docs/DEVELOPMENT.md). Browser login, note operations and the editor are not implemented yet. The next milestone remains projects with an Inbox, Markdown editing with a small toolbar, safe saves, search, history, trash/restore, and export.
+Stage 1 adds a FastAPI health service, SQLite migration, local owner/Inbox setup, Docker configuration and foundation tests. Stage 2 adds internal project/note services, revisions, trash/restore, conflict checks and safe retries; see [stage 2 scope](docs/STAGE_2.md). See [development setup](docs/DEVELOPMENT.md) to run tests. Browser login, public note endpoints, search, exports and the editor are not implemented yet.
 
 See the [first milestone](docs/MILESTONE_0_0_1.md), [data model](docs/DATA_MODEL.md), and [capability contracts](docs/CAPABILITIES.md). These describe planned behavior, not implemented features. Revision cleanup, nested folders and rich document/image editing follow later.
 
