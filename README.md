@@ -23,9 +23,9 @@ See [Architecture](docs/ARCHITECTURE.md), [Product specification](docs/PRODUCT_S
 
 ## Status
 
-Stages 1-3 add the FastAPI/SQLite foundation, trusted note/project services and authenticated responsive Markdown notebook. Stage 4 adds scoped current-content FTS5 search and retained-history usage reporting. Stage 5 adds authenticated note Markdown export plus project/workspace ZIP snapshots with versioned manifests. Stage 6 adds verified SQLite backup/recovery tooling with SHA-256 reporting, guarded offline restore and recovery tests; see [stage 6 scope](docs/STAGE_6.md) and the [backup/restore runbook](docs/BACKUP_RESTORE.md). The stacked draft PRs remain unmerged.
+Stages 1-3 add the FastAPI/SQLite foundation, trusted note/project services and authenticated responsive Markdown notebook. Stage 4 adds scoped current-content FTS5 search and retained-history usage reporting. Stage 5 adds authenticated note Markdown export plus project/workspace ZIP snapshots with versioned manifests. Stage 6 adds verified SQLite backup/recovery tooling with SHA-256 reporting, guarded offline restore and recovery tests. Stage 7 is the v0.0.1 acceptance/release-hardening pass: it adds read-only historical revision viewing, Chromium workflow smoke coverage, a pinned production dependency resolution and a committed acceptance record.
 
-The complete v0.0.1 milestone is still unfinished: broader usability/accessibility acceptance, real Pi/ARM64 deployment validation and release-readiness review remain. No AI feature is implemented yet. See [development setup](docs/DEVELOPMENT.md).
+The complete v0.0.1 milestone is still unfinished until the required manual Pi/ARM64, OMV persistence, phone/desktop keyboard, Tailscale and real recovery checks are recorded. See the [v0.0.1 acceptance record](docs/V0_0_1_ACCEPTANCE.md), [development setup](docs/DEVELOPMENT.md), and [backup/restore runbook](docs/BACKUP_RESTORE.md). No AI feature is implemented yet.
 
 See the [first milestone](docs/MILESTONE_0_0_1.md), [data model](docs/DATA_MODEL.md), and [capability contracts](docs/CAPABILITIES.md). These describe accepted behavior beyond what is currently implemented. Revision cleanup, nested folders and rich document/image editing follow later.
 

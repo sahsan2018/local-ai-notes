@@ -8,6 +8,7 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from .db import database_engine
 from .export_web import install_export_web
+from .history_web import install_history_web
 from .web import install_web
 
 
@@ -41,4 +42,5 @@ def create_app(engine=None, cookie_secure=None):
 
     install_web(app, engine, cookie_secure=cookie_secure)
     install_export_web(app, engine)
+    install_history_web(app, engine)
     return app
