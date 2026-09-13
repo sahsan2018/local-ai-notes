@@ -19,22 +19,22 @@ This document is the release evidence record for [Milestone v0.0.1](MILESTONE_0_
 
 | ID | Scenario | Current status | Existing / planned evidence |
 | --- | --- | --- | --- |
-| AC-01 | Clean setup and owner bootstrap | PARTIAL | Foundation CI proves empty-volume migration/startup; final fresh-main setup and real Pi bootstrap remain manual. |
-| AC-02 | Authorization protects notes, search, history and exports | PASS — automated | Authentication/service/web/export tests. Recheck through browser smoke suite. |
-| AC-03 | Save creates stable identity and exact normalized content | PASS — automated | Service/web tests. |
+| AC-01 | Clean setup and owner bootstrap | PARTIAL | Foundation CI proves empty-volume migration/startup; final fresh-checkout setup and real Pi bootstrap remain manual. |
+| AC-02 | Authorization protects notes, search, history and exports | PASS — automated | Authentication/service/web/export tests plus historical-revision authorization coverage. |
+| AC-03 | Save creates stable identity and exact normalized content | PASS — automated | Service/web tests and Chromium workflow smoke. |
 | AC-04 | Unchanged save creates no revision/version/time change | PASS — automated | Service tests. |
-| AC-05 | Concurrent edit conflict preserves unsaved draft | PASS — automated | Service/web conflict tests; browser smoke will exercise UI behavior. |
+| AC-05 | Concurrent edit conflict preserves unsaved draft | PASS — automated | Service/web conflict tests. |
 | AC-06 | Idempotent retry and key/payload conflict | PASS — automated | Service tests. |
-| AC-07 | History lists saved revisions; restore creates new revision with lineage; historical content can be viewed | GAP | Revision listing/restore are implemented and tested. Historical read capability exists in `Notebook.get_revision`, but Stage 6 UI/HTTP does not expose historical title/body. Stage 7 must close this gap. |
-| AC-08 | Trash hides from normal lists/search; restore returns it; trashed note cannot edit | PASS — automated | Service/search/web tests. |
+| AC-07 | History lists saved revisions; restore creates new revision with lineage; historical content can be viewed | PASS — automated | `tests/test_history_view.py` verifies authorized historical content reads and note/revision binding; Chromium smoke verifies the read-only History viewer and focus behavior. |
+| AC-08 | Trash hides from normal lists/search; restore returns it; trashed note cannot edit | PASS — automated | Service/search/web tests and Chromium trash/restore workflow. |
 | AC-09 | Search uses current active content; rebuild equivalent | PASS — automated | Stage 4 search tests and Stage 6 recovery rebuild test. |
 | AC-10 | Export filenames/path safety and YAML round trip | PASS — automated | `tests/test_exports.py`. |
 | AC-11 | Workspace export is one consistent snapshot | PASS — automated | Stage 5 detached snapshot/mutation tests. |
-| AC-12 | Container restart preserves notes/history/project membership | PENDING — manual | CI proves container start/migration; real persistence across restart/reboot must be recorded on Pi/OMV. |
+| AC-12 | Container restart preserves notes/history/project membership | PENDING — manual | CI proves container build/start/migration/readiness; real persistence across restart/reboot must be recorded on Pi/OMV. |
 | AC-13 | Consistent backup restores into separate instance; history/ownership/search recover | PASS — automated | `tests/test_backup.py`; real Pi recovery rehearsal remains required for release confidence. |
-| AC-14 | Simulated write/storage failure is atomic and UI keeps draft/reports failure | PARTIAL | Transaction rollback/failure paths are covered in service/search tests; Stage 7 audit/browser tests must verify user-visible failure behavior. |
+| AC-14 | Simulated write/storage failure is atomic and UI keeps draft/reports failure | PARTIAL | Transaction rollback/failure paths are covered in service/search tests. User-visible failed-save draft retention remains a manual acceptance check. |
 | AC-15 | Markdown/script safety and CSRF protections | PASS — automated | Web sanitization, same-origin/CSRF and preview tests. |
-| AC-16 | Primary workflows work with keyboard, phone and desktop; focus/save state understandable | PENDING — manual | Stage 7 will add browser/a11y smoke checks; real keyboard and phone/desktop acceptance remains manual. |
+| AC-16 | Primary workflows work with keyboard, phone and desktop; focus/save state understandable | PENDING — manual | Chromium smoke passes login/create/save/history/preview/export/trash/restore, keyboard save, accessible-name/focus checks and 390×844 overflow check. Real keyboard and phone/software-keyboard acceptance remains manual. |
 | AC-17 | Core notebook works with all AI services/GPU machine off | PASS — automated | No AI runtime dependency exists in v0.0.1. Final Pi validation will record this explicitly. |
 
 ## Project acceptance scenarios
@@ -50,21 +50,25 @@ This document is the release evidence record for [Milestone v0.0.1](MILESTONE_0_
 | PA-07 | Historical restore leaves current project membership unchanged | PASS — automated | Service tests. |
 | PA-08 | Nested folders, project deletion and AI behavior remain absent | PASS — inspection | Explicitly deferred by milestone/roadmap; no such capability is exposed. |
 
-## Stage 7 automated release-hardening work
+## Stage 7 automated release-hardening evidence
 
-Before manual hardware acceptance, Stage 7 will:
+Current Stage 7 CI evidence:
 
-1. close AC-07 by exposing authorized read-only historical revision viewing;
-2. add browser-level smoke tests for primary UI workflows and relevant viewport behavior;
-3. add automated accessibility checks for principal pages and fix high-confidence violations;
-4. strengthen dependency reproducibility for the deployment image;
-5. add dependency/security scanning suitable for CI or release review;
-6. rerun the complete Stage 1–7 test/build/migration/startup suite;
-7. update this record with exact test names and CI evidence.
+- Foundation workflow run `34769871117` passed the complete test/build/deployment smoke path.
+- `pytest -q` passed 37 tests, including `tests/test_history_view.py` and `tests/test_browser_acceptance.py::test_primary_browser_workflow_history_keyboard_and_phone_viewport` using real Chromium.
+- The browser smoke exercises login, project/note creation, Ctrl+S and explicit save, read-only historical viewing, preview, dirty-note export blocking, trash/restore, focus behavior, accessible names/labels and a 390×844 no-horizontal-overflow check.
+- Browser acceptance uncovered a missing accessible name on the Markdown body editor; Stage 7 fixed it with `aria-label="Note body"`, and the rerun passed.
+- `pip check` passed.
+- `pip-audit -r requirements.lock` passed against the exact production dependency resolution.
+- `tests/test_release_hardening.py` verifies direct runtime dependencies are represented by exact lock pins and the Docker build installs the lock before the application with dependency resolution disabled.
+- Docker Compose configuration, locked image build, Alembic migration through schema `0002`, container startup, `/health/ready` and teardown all passed.
+- Documentation lint passed on the same candidate.
+
+The production lock pins exact versions but does not include package artifact hashes; this record does not claim hash-level supply-chain reproducibility.
 
 ## Manual acceptance still required
 
-The following evidence must be supplied from the intended deployment before v0.0.1 can be marked complete:
+Follow [Manual acceptance](MANUAL_ACCEPTANCE.md). The following evidence must be supplied from the intended deployment before v0.0.1 can be marked complete:
 
 - Raspberry Pi 5 / ARM64 image build and application startup;
 - OMV bind-mount ownership, SQLite locking and persistence across container restart and Pi reboot;
