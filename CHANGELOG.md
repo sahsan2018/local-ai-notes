@@ -8,3 +8,7 @@ All notable changes will be documented here. The format is based on Keep a Chang
 
 - Initial public project documentation and governance scaffold.
 - Draft architecture, product specification, roadmap, and first ADR.
+
+### Changed
+
+- Changed the project license from AGPL-3.0 to MIT at the owner's request.
