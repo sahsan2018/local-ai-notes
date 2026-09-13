@@ -11,12 +11,13 @@ Local AI Notes is a local-first note platform. Ordinary note-taking is the produ
 
 1. Human-owned information remains recoverable without AI.
 2. Original input is never silently destroyed by AI processing.
-3. Every AI modification is attributable and reversible.
+3. Every AI modification is attributable and recoverable through retained history; future explicit history cleanup must disclose its recovery limits.
 4. Canonical data is separated from regenerable derived data.
 5. UI and AI actions use the same application capability layer.
 6. Models, prompts, storage locations, and hardware are replaceable.
 7. The application remains useful while every AI service is offline.
 8. Personal deployment configuration never becomes a source-code assumption.
+9. Project-scoped AI access is enforced by backend capabilities across retrieval and tools, never by prompts alone.
 
 ## 3. System context
 
@@ -48,7 +49,7 @@ These are design directions, not irrevocable choices. Significant changes requir
 
 SQLite is authoritative for notes, accepted metadata, revisions, relationships, jobs, and audit records. Attachments are files referenced by stable database identifiers.
 
-Canonical note bodies use a Markdown-compatible representation; opaque editor HTML is not authoritative. Markdown, JSON, and CSV are export formats rather than a second writable source of truth.
+Initial canonical note bodies use versioned Markdown with a small formatting toolbar; richer structured documents require a later schema decision and lossless native export. Display preferences are separate from saved styling. Opaque editor HTML is not authoritative. Markdown, JSON, and CSV are export formats rather than a second writable source of truth.
 
 Derived data includes embeddings, vector indexes, thumbnails, cached summaries, OCR indexes, and saved query caches. Derived artifacts must be rebuildable from canonical records and retained source material.
 
@@ -62,10 +63,10 @@ Derived data includes embeddings, vector indexes, thumbnails, cached summaries, 
 
 ## 7. Capability layer
 
-Business operations are ordinary application services, initially including:
+Business operations are ordinary application services. The long-term catalog includes:
 
 - notes: create, read, update, append, archive, restore, move, duplicate;
-- organization: notebooks, tags, properties, links, backlinks;
+- organization: projects first, then folders within projects, tags, properties, links and backlinks;
 - retrieval: FTS search, filters, saved queries;
 - attachments and exports;
 - revision history and comparison.
@@ -73,6 +74,16 @@ Business operations are ordinary application services, initially including:
 Routes and UI handlers call these services. Future REST tool adapters and MCP adapters wrap the same services. Models receive no direct SQL or arbitrary filesystem access.
 
 Capabilities will declare a risk class: read-only, reversible write, significant/bulk write, or destructive. Bulk and destructive operations require preview and/or explicit confirmation.
+
+## Project organization and AI scope
+
+Each note belongs to exactly one owner-owned project. Bootstrap creates an Inbox project for quick capture. v0.0.1 supports creating, renaming and listing projects, moving active notes, project-scoped search/listing and explicit all-project browsing. Projects are not deleted in this milestone. Moves preserve content history, increment note version and create audit events. Later folders are subordinate to projects, not an alternative ownership model.
+
+Future AI conversations bind to an explicit project scope. Authorization and scope filtering apply before retrieval results enter prompts and on every tool read/write, attachment access, cached result and citation lookup. Direct IDs and links must not bypass scope. Global scope is an explicit user choice; switching projects starts a fresh conversation by default, without inherited transcripts, summaries or retrieval caches.
+
+Jobs capture scope and input revision IDs. Revalidate project membership before dispatch and again before accepting results or applying writes; moving a note can make a queued result stale. Already-disclosed model context cannot be retroactively erased, so revoke/restart affected conversation context before reuse. Project instructions are future configuration, not authorization rules.
+
+Isolation limits application-supplied private context, not pretrained general knowledge. A future project-sources-only answer mode requires citations and an insufficient-evidence response when sources cannot support an answer. Projects are not separate user accounts or cryptographic storage boundaries.
 
 ## 8. Ingestion and AI boundary
 
@@ -108,6 +119,12 @@ Training/evaluation exports must be explicit, reviewable, and privacy-aware. Use
 - Backups are encrypted where practical and restoration is tested.
 
 See [SECURITY.md](../SECURITY.md) for reporting policy. A detailed threat model will precede remote AI write operations.
+
+## Initial defaults and future maintenance
+
+The first milestone uses one owner account, local bootstrap/password recovery, seven-day absolute sessions, explicit saves and preserved in-browser drafts on save failure. It does not promise offline synchronization or drafts surviving browser closure.
+
+All saved revisions are retained in v0.0.1, with unchanged saves skipped and history counts/approximate bytes visible. Checkpoints and preview/confirmed cleanup belong to a later maintenance milestone; no pruning service or checkpoint table is required initially. The future retention policy is described in [Data model](DATA_MODEL.md). Evaluate storage growth before heavy use.
 
 ## 11. Operations and durability
 

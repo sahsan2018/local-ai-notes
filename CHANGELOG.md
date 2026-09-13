@@ -12,3 +12,6 @@ All notable changes will be documented here. The format is based on Keep a Chang
 ### Changed
 
 - Changed the project license from AGPL-3.0 to MIT at the owner's request.
+
+- Revised planned v0.0.1 defaults: projects/Inbox, Markdown toolbar, seven-day sessions, Untitled capture and retained history with cleanup deferred.
+- Documented future project-scoped AI enforcement, editor evolution and project organization ADR.

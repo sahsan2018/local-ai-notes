@@ -13,3 +13,7 @@ Include affected versions or commits, reproduction conditions, potential impact,
 ## Project security posture
 
 The project is pre-release and should not be exposed directly to the public Internet. Planned controls include application authentication, authorization at the capability layer, CSRF protection, content sanitization, safe upload handling, secret isolation, audit records, and confirmation for destructive or bulk AI actions.
+
+## Planned project scope enforcement
+
+Future AI project scope is enforced server-side in retrieval, direct-ID access, attachments, caches, citations and writes. Prompts and project instructions cannot grant authority. Cross-project access requires explicit user scope selection; switching projects defaults to fresh conversation context. Scope does not erase pretrained knowledge or provide encryption isolation. Revalidate queued jobs when note membership changes. See [Architecture](docs/ARCHITECTURE.md).

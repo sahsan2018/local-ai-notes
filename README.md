@@ -8,6 +8,7 @@ A local-first, self-hosted note-taking platform designed to remain fully useful 
 ## Vision
 
 - Durable, human-owned notes with SQLite as the system of record.
+- Projects for organization and future server-enforced AI context scope.
 - Responsive desktop and mobile web experience.
 - Revisions, provenance, soft deletion, export, and recovery from the beginning.
 - One capability layer shared by the UI, API, and future AI tools.
@@ -22,7 +23,9 @@ See [Architecture](docs/ARCHITECTURE.md), [Product specification](docs/PRODUCT_S
 
 ## Status
 
-No application code has been committed yet. The next milestone is a thin vertical slice: create, edit, retrieve, search, revise, delete/restore, and export a note.
+No application code has been committed yet. The next milestone is a thin vertical slice: projects with an Inbox, Markdown editing with a small toolbar, safe saves, search, history, trash/restore, and export.
+
+See the [first milestone](docs/MILESTONE_0_0_1.md), [data model](docs/DATA_MODEL.md), and [capability contracts](docs/CAPABILITIES.md). These describe planned behavior, not implemented features. Revision cleanup, nested folders and rich document/image editing follow later.
 
 ## Contributing
 

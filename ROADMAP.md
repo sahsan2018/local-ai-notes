@@ -13,19 +13,26 @@ This roadmap communicates direction, not delivery dates.
 
 - FastAPI application and migration framework.
 - Authentication and responsive shell.
-- Notes, revisions, trash/restore, and FTS5 search.
+- Inbox and projects, note moves, scoped/all-project lists and FTS5 search.
+- Markdown toolbar/preview, conflict-safe saves, retained revisions and trash/restore.
+- History counts and approximate storage usage; no cleanup yet.
 - Portable note export.
 - Docker Compose development and Pi deployment documentation.
 
-## Phase 2 — Note platform MVP
+## Phase 2 — Editor design and note platform MVP
 
-- Notebooks, tags, properties, links/backlinks, and attachments.
+- Prioritize rich editor design before substantial organization expansion; specify structured content/export fidelity before implementation.
+- Folders within projects, tags, properties, links/backlinks and attachments.
+- Plan rich text styling and image editing as core features independent of AI; preserve image originals.
+- Add checkpoints and owner-previewed/confirmed cleanup after measuring history growth.
 - Import workflows, backup guidance, and admin health view.
 - Accessibility, security, migration, and recovery testing.
 
 ## Phase 3 — Optional AI boundary
 
-- Durable idempotent jobs and authenticated worker API.
+- Durable idempotent jobs and authenticated worker API, bound to explicit project scopes.
+- Enforce scope across retrieval, tools, attachments, caches and citations; revalidate moved notes.
+- Explicit global access, fresh conversations on project switching and grounded source-only answer behavior.
 - Replaceable AI-provider interfaces.
 - Proposed-output review flow and detailed provenance.
 - First summarization/extraction evaluation set.

@@ -15,13 +15,17 @@ The initial user is a technically capable self-hoster using desktop and mobile b
 
 Desktop uses a three-pane workspace: navigation, note/editor, and contextual metadata. Mobile presents these as focused screens. AI remains accessible but does not dominate the interface.
 
+## First working milestone (v0.0.1)
+
+See [acceptance specification](MILESTONE_0_0_1.md). Include one owner, Inbox and simple projects, a Markdown toolbar/preview, explicit conflict-safe saves, project-scoped and explicit all-project search, retained history, trash and portable export. No project deletion, nested folders, checkpoints or cleanup yet.
+
 ## MVP (v0.1)
 
 A user can:
 
 - authenticate;
 - create, view, edit, and archive/restore notes;
-- organize notes in notebooks/folders;
+- organize notes in projects, with folders within projects added after the first milestone;
 - add tags and simple typed properties;
 - link notes and inspect backlinks;
 - attach files;
@@ -34,15 +38,21 @@ AI is not an MVP acceptance criterion.
 
 ## First AI vertical slice
 
-- The Pi creates a durable summarization job.
+- The user chooses a project scope; the Pi creates a durable summarization job bound to that scope and input revisions.
 - An authenticated remote worker claims it and invokes a configured local provider.
 - The proposed summary records full AI provenance.
 - The user may accept, edit, or reject it.
 - Acceptance creates a normal attributed revision.
 - The core app continues working if the worker is unavailable.
+- Retrieval and tools enforce scope in the backend; global access is explicit and switching projects defaults to a fresh conversation.
+- Project-sources-only answers cite supporting notes or acknowledge insufficient evidence; model general knowledge is not erased.
 
 ## Later core features
 
+- rich editor design: fonts, colors, alignment and layout through versioned structured content;
+- image crop/rotation/annotations while retaining original attachments;
+- user display preferences distinct from note styling;
+- checkpoints and preview/confirmed history cleanup after measured storage review;
 - tasks and due dates;
 - saved filtered/sorted views;
 - Markdown/JSON/CSV import;
@@ -81,8 +91,8 @@ AI is not an MVP acceptance criterion.
 ## Open product decisions
 
 - editor library and exact Markdown subset;
-- notebook hierarchy versus labels at the domain level;
+- folder hierarchy within projects; project membership is already settled;
 - property types included in v0.1;
 - attachment size/type policy;
-- authentication mechanism for the first self-hosted release;
+- password hashing implementation and authentication hardening; one owner and seven-day absolute sessions are settled;
 - exact import/export compatibility promises.
