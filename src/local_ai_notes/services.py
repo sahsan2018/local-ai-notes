@@ -28,6 +28,14 @@ def row(c, sql, **values):
     return dict(result)
 
 
+def _timestamp_cursor(value):
+    if value is None:
+        return None
+    if not isinstance(value, (tuple, list)) or len(value) != 2 or not isinstance(value[0], str):
+        raise ServiceError('validation_error', field='cursor')
+    return value[0], identifier(value[1])
+
+
 class Notebook:
     """One instance per trusted authenticated actor, not a public HTTP API."""
 
@@ -39,71 +47,87 @@ class Notebook:
             raise ServiceError('authentication_required')
 
     def _project(self, c, project_id):
-        return row(c, 'SELECT * FROM projects WHERE id=:id AND owner_id=:owner',
-                   id=identifier(project_id), owner=self.actor)
+        return row(c, 'SELECT * FROM projects WHERE id=:id AND owner_id=:owner', id=identifier(project_id), owner=self.actor)
 
     def _note(self, c, note_id):
         return row(c, '''SELECT n.*, r.revision_number, r.title, r.body_markdown,
                    r.content_format, r.content_schema_version
                    FROM notes n JOIN note_revisions r ON r.id=n.current_revision_id
-                   WHERE n.id=:id AND n.owner_id=:owner''',
-                   id=identifier(note_id), owner=self.actor)
+                   WHERE n.id=:id AND n.owner_id=:owner''', id=identifier(note_id), owner=self.actor)
 
     def _revision(self, c, note_id, revision_id):
         self._note(c, note_id)
-        return row(c, 'SELECT * FROM note_revisions WHERE note_id=:note AND id=:id',
-                   note=note_id, id=identifier(revision_id))
+        return row(c, 'SELECT * FROM note_revisions WHERE note_id=:note AND id=:id', note=note_id, id=identifier(revision_id))
 
     def get_note(self, note_id):
-        with self.engine.connect() as c:
-            self._authorize(c)
-            return self._note(c, note_id)
+        try:
+            with self.engine.connect() as c:
+                self._authorize(c)
+                return self._note(c, note_id)
+        except OperationalError:
+            raise ServiceError('temporarily_unavailable') from None
 
     def get_revision(self, note_id, revision_id):
-        with self.engine.connect() as c:
-            self._authorize(c)
-            return self._revision(c, identifier(note_id), revision_id)
+        try:
+            with self.engine.connect() as c:
+                self._authorize(c)
+                return self._revision(c, identifier(note_id), revision_id)
+        except OperationalError:
+            raise ServiceError('temporarily_unavailable') from None
 
-    def list_projects(self, limit=25, after=''):
+    def list_projects(self, limit=25, after=None):
         return self._list('projects', limit, after)
 
-    def list_notes(self, project_id, trashed=False, limit=25, after=''):
-        # None means explicit all-projects; callers must choose a scope.
+    def list_notes(self, project_id, trashed=False, limit=25, after=None):
         return self._list('notes', limit, after, project_id, trashed)
 
-    def list_revisions(self, note_id, limit=25, after=''):
+    def list_revisions(self, note_id, limit=25, after=None):
         return self._list('revisions', limit, after, note_id)
 
     def _list(self, kind, limit, after, scope=None, trashed=False):
         if type(limit) is not int or not 1 <= limit <= 100:
             raise ServiceError('validation_error', field='limit')
-        if after:
-            identifier(after)
-        with self.engine.connect() as c:
-            self._authorize(c)
-            values = {'owner': self.actor, 'after': after, 'limit': limit}
-            if kind == 'projects':
-                sql = 'SELECT * FROM projects WHERE owner_id=:owner AND id>:after ORDER BY id LIMIT :limit'
-            elif kind == 'revisions':
-                self._note(c, scope)
-                values['scope'] = identifier(scope)
-                sql = '''SELECT id,note_id,revision_number,created_at,actor_type,actor_id,restored_from_revision_id
-                         FROM note_revisions WHERE note_id=:scope AND id>:after ORDER BY id LIMIT :limit'''
-            else:
-                values['deleted'] = int(trashed)
-                sql = '''SELECT n.id,n.project_id,n.version,n.updated_at,n.deleted_at,r.title
-                         FROM notes n JOIN note_revisions r ON r.id=n.current_revision_id
-                         WHERE n.owner_id=:owner AND n.id>:after
-                         AND (n.deleted_at IS NOT NULL)=:deleted'''
-                if scope is not None:
-                    self._project(c, scope)
+        try:
+            with self.engine.connect() as c:
+                self._authorize(c)
+                values = {'owner': self.actor, 'limit': limit}
+                if kind == 'projects':
+                    cursor = _timestamp_cursor(after)
+                    sql = 'SELECT * FROM projects WHERE owner_id=:owner'
+                    if cursor:
+                        values.update(after_time=cursor[0], after_id=cursor[1])
+                        sql += ' AND (updated_at<:after_time OR (updated_at=:after_time AND id<:after_id))'
+                    sql += ' ORDER BY updated_at DESC,id DESC LIMIT :limit'
+                elif kind == 'revisions':
+                    self._note(c, scope)
                     values['scope'] = identifier(scope)
-                    sql += ' AND n.project_id=:scope'
-                sql += ' ORDER BY n.id LIMIT :limit'
-            return [dict(r) for r in c.execute(text(sql), values).mappings()]
+                    if after is not None and (type(after) is not int or after < 1):
+                        raise ServiceError('validation_error', field='cursor')
+                    sql = '''SELECT id,note_id,revision_number,created_at,actor_type,actor_id,restored_from_revision_id
+                             FROM note_revisions WHERE note_id=:scope'''
+                    if after is not None:
+                        values['after_number'] = after
+                        sql += ' AND revision_number<:after_number'
+                    sql += ' ORDER BY revision_number DESC LIMIT :limit'
+                else:
+                    cursor = _timestamp_cursor(after)
+                    values['deleted'] = int(trashed)
+                    sql = '''SELECT n.id,n.project_id,n.version,n.updated_at,n.deleted_at,r.title
+                             FROM notes n JOIN note_revisions r ON r.id=n.current_revision_id
+                             WHERE n.owner_id=:owner AND (n.deleted_at IS NOT NULL)=:deleted'''
+                    if scope is not None:
+                        self._project(c, scope)
+                        values['scope'] = identifier(scope)
+                        sql += ' AND n.project_id=:scope'
+                    if cursor:
+                        values.update(after_time=cursor[0], after_id=cursor[1])
+                        sql += ' AND (n.updated_at<:after_time OR (n.updated_at=:after_time AND n.id<:after_id))'
+                    sql += ' ORDER BY n.updated_at DESC,n.id DESC LIMIT :limit'
+                return [dict(r) for r in c.execute(text(sql), values).mappings()]
+        except OperationalError:
+            raise ServiceError('temporarily_unavailable') from None
 
-    def execute(self, operation, key, **payload):
-        """Allowlisted mutation dispatcher; payload never includes actor/provenance."""
+    def execute(self, operation, key, request_id=None, **payload):
         fields = {
             'create_project': ({'name'}, {'description'}),
             'rename_project': ({'project_id', 'expected_version', 'name'}, set()),
@@ -120,6 +144,7 @@ class Notebook:
         if not required <= payload.keys() or payload.keys() - required - optional:
             raise ServiceError('validation_error', field='payload')
         key = identifier(key)
+        request_id = identifier(request_id or uuid4())
         p = dict(payload)
         for field in p:
             if field.endswith('_id'):
@@ -151,7 +176,6 @@ class Notebook:
                     self._authorize(c)
                     if operation == 'create_note' and 'project_id' not in p:
                         p['project_id'] = row(c, 'SELECT id FROM projects WHERE owner_id=:owner AND is_inbox=1', owner=self.actor)['id']
-                    # Check current ownership before receipt replay, without imposing stale version/state checks.
                     if 'note_id' in p:
                         self._note(c, p['note_id'])
                     for field in ('project_id', 'destination_project_id'):
@@ -159,18 +183,15 @@ class Notebook:
                             self._project(c, p[field])
                     digest = hashlib.sha256(json.dumps([operation, p], sort_keys=True).encode()).hexdigest()
                     now = datetime.now(timezone.utc)
-                    receipt = c.execute(text('SELECT * FROM mutation_receipts WHERE actor_id=:actor AND idempotency_key=:key'),
-                                        {'actor': self.actor, 'key': key}).mappings().first()
+                    receipt = c.execute(text('SELECT * FROM mutation_receipts WHERE actor_id=:actor AND idempotency_key=:key'), {'actor': self.actor, 'key': key}).mappings().first()
                     if receipt and receipt['expires_at'] > now.isoformat():
                         if receipt['request_hash'] != digest:
                             raise ServiceError('idempotency_conflict')
                         c.rollback()
                         return json.loads(receipt['result_json'])
-                    result = self._mutate(c, operation, p, now.isoformat(), key)
+                    result = self._mutate(c, operation, p, now.isoformat(), request_id)
                     c.execute(text('DELETE FROM mutation_receipts WHERE actor_id=:actor AND idempotency_key=:key'), {'actor': self.actor, 'key': key})
-                    c.execute(text('INSERT INTO mutation_receipts VALUES (:actor,:key,:op,:hash,:result,:now,:expiry)'),
-                              {'actor': self.actor, 'key': key, 'op': operation, 'hash': digest,
-                               'result': json.dumps(result), 'now': now.isoformat(), 'expiry': (now + timedelta(days=7)).isoformat()})
+                    c.execute(text('INSERT INTO mutation_receipts VALUES (:actor,:key,:op,:hash,:result,:now,:expiry)'), {'actor': self.actor, 'key': key, 'op': operation, 'hash': digest, 'result': json.dumps(result), 'now': now.isoformat(), 'expiry': (now + timedelta(days=7)).isoformat()})
                     c.commit()
                     return result
                 except Exception:
@@ -186,8 +207,7 @@ class Notebook:
         before = None
         if op == 'create_project':
             project = str(uuid4())
-            c.execute(text('INSERT INTO projects VALUES (:id,:owner,:name,:description,0,1,:now,:now)'),
-                      dict(p, id=project, owner=self.actor, now=now))
+            c.execute(text('INSERT INTO projects VALUES (:id,:owner,:name,:description,0,1,:now,:now)'), dict(p, id=project, owner=self.actor, now=now))
             version = 1
         elif op == 'rename_project':
             old = self._project(c, p['project_id'])
@@ -196,13 +216,11 @@ class Notebook:
             changed = old['name'] != p['name']
             version = old['version'] + int(changed)
             if changed:
-                c.execute(text('UPDATE projects SET name=:name,version=:version,updated_at=:now WHERE id=:id'),
-                          {'name': p['name'], 'version': version, 'now': now, 'id': project})
+                c.execute(text('UPDATE projects SET name=:name,version=:version,updated_at=:now WHERE id=:id'), {'name': p['name'], 'version': version, 'now': now, 'id': project})
         elif op == 'create_note':
             note, revision = str(uuid4()), str(uuid4())
             project = p['project_id']
-            c.execute(text("INSERT INTO notes VALUES (:id,:owner,:project,:revision,1,2,:now,:now,NULL)"),
-                      {'id': note, 'owner': self.actor, 'project': project, 'revision': revision, 'now': now})
+            c.execute(text("INSERT INTO notes VALUES (:id,:owner,:project,:revision,1,2,:now,:now,NULL)"), {'id': note, 'owner': self.actor, 'project': project, 'revision': revision, 'now': now})
             self._insert_revision(c, note, revision, 1, p, now, request)
         else:
             old = self._note(c, p['note_id'])
@@ -216,10 +234,8 @@ class Notebook:
                 if changed:
                     revision = str(uuid4())
                     before = old['current_revision_id']
-                    self._insert_revision(c, note, revision, old['next_revision_number'], content, now, request,
-                                          p.get('revision_id'))
-                    c.execute(text('UPDATE notes SET current_revision_id=:revision,next_revision_number=next_revision_number+1 WHERE id=:id'),
-                              {'revision': revision, 'id': note})
+                    self._insert_revision(c, note, revision, old['next_revision_number'], content, now, request, p.get('revision_id'))
+                    c.execute(text('UPDATE notes SET current_revision_id=:revision,next_revision_number=next_revision_number+1 WHERE id=:id'), {'revision': revision, 'id': note})
             elif op == 'move_note':
                 changed = project != p['destination_project_id']
                 if changed:
@@ -234,10 +250,7 @@ class Notebook:
             if changed:
                 c.execute(text('UPDATE notes SET version=version+1,updated_at=:now WHERE id=:id'), {'now': now, 'id': note})
         if changed:
-            c.execute(text('INSERT INTO audit_events VALUES (:id,:note,:project,:op,\'user\',:actor,:request,:now,1,:details)'),
-                      {'id': str(uuid4()), 'note': note, 'project': project, 'op': op,
-                       'actor': self.actor, 'request': request, 'now': now,
-                       'details': json.dumps({'previous_id': before, 'source_revision_id': p.get('revision_id')})})
+            c.execute(text('INSERT INTO audit_events VALUES (:id,:note,:project,:op,\'user\',:actor,:request,:now,1,:details)'), {'id': str(uuid4()), 'note': note, 'project': project, 'op': op, 'actor': self.actor, 'request': request, 'now': now, 'details': json.dumps({'previous_id': before, 'source_revision_id': p.get('revision_id')})})
         if note:
             current = self._note(c, note)
             return {k: current[k] for k in ('id', 'project_id', 'version', 'current_revision_id', 'revision_number', 'updated_at')} | {'changed': changed}
@@ -246,11 +259,7 @@ class Notebook:
     @staticmethod
     def _version(old, payload):
         if old['version'] != payload['expected_version']:
-            raise ServiceError('version_conflict', current_version=old['version'],
-                               current_revision_id=old.get('current_revision_id'))
+            raise ServiceError('version_conflict', current_version=old['version'], current_revision_id=old.get('current_revision_id'))
 
     def _insert_revision(self, c, note, revision, number, content, now, request, restored=None):
-        c.execute(text("INSERT INTO note_revisions VALUES (:id,:note,:number,:title,'markdown',1,:body,'user',:actor,'manual',:request,:now,:restored)"),
-                  {'id': revision, 'note': note, 'number': number, 'title': content['title'],
-                   'body': content['body_markdown'], 'actor': self.actor, 'request': request,
-                   'now': now, 'restored': restored})
+        c.execute(text("INSERT INTO note_revisions VALUES (:id,:note,:number,:title,'markdown',1,:body,'user',:actor,'manual',:request,:now,:restored)"), {'id': revision, 'note': note, 'number': number, 'title': content['title'], 'body': content['body_markdown'], 'actor': self.actor, 'request': request, 'now': now, 'restored': restored})
